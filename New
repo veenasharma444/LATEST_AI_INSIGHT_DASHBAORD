@@ -1,8 +1,10 @@
-    @app.callback(
-        Output('save-load-modal', 'is_open'),
-        Input('btn-open-save-modal', 'n_clicks'),
-        State('save-load-modal', 'is_open'),
-        prevent_initial_call=True
-    )
-    def toggle_save_load_modal(n_clicks, is_open):
-        return not is_open
+@app.callback(
+    Output('save-load-modal', 'is_open'),
+    Input('btn-open-save-modal', 'n_clicks'),
+    State('save-load-modal', 'is_open'),
+    prevent_initial_call=True
+)
+def open_save_modal(n_clicks, is_open):
+    if not n_clicks:
+        raise PreventUpdate
+    return not is_open
