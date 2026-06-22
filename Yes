@@ -1,51 +1,229 @@
-
-@app.callback(
-    Output('save-dashboard-status', 'children'),
-    Input('btn-save-dashboard', 'n_clicks'),
-    State('save-dashboard-name', 'value'),
-    State('store-kpi-selections-dashboard', 'data'),
-    State('store-filter-selections-dashboard', 'data'),
-    State('store-confirmed-dtypes-dashboard', 'data'),
-    State('store-ai-suggestions', 'data'),
-    State('session-state', 'data'),
-    prevent_initial_call=True
-)
-def save_dashboard_callback(
-    n_clicks,
-    dashboard_name,
-    kpis,
-    filters,
-    dtypes,
-    ai_suggestions,
-    session_data
-):
-    from core.cache_manager import CacheManager
-
-    if not dashboard_name:
-        return "Please enter dashboard name"
-
-    user_id = (session_data or {}).get("user_id")
-
-    if not user_id:
-        return "User session not found"
-
-    manifest = CacheManager.load_manifest()
-    upload_id = manifest.get("active_upload_id")
-
-    if not upload_id:
-        return "No active upload found"
-
-    result = save_dashboard(
-        dashboard_name,
-        user_id,
-        upload_id,
-        kpis or [],
-        filters or [],
-        dtypes or {},
-        ai_suggestions or {}
+  @app.callback(
+        Output('upload-status', 'children'),
+        Output('preview-container', 'children'),
+        Output('store-upload-id', 'data'),
+        Input('upload-data', 'contents'),
+        Input('upload-data', 'filename'),
+        prevent_initial_call=True
     )
+    def handle_file_upload(contents, filename):
+        """Parse upload, run full data profiling, show analysis panel"""
+        if not contents or not filename:
+            return "", []
 
-    if result.get("success"):
-        return f"✅ Dashboard '{dashboard_name}' saved successfully"
+        try:
+            from core.file_handler import FileHandler
+            from core.data_profiler import DataProfiler
+            from core.cache_manager import CacheManager
+            import numpy as np
 
-    return f"❌ {result.get('message', 'Save failed')}"
+            df = FileHandler.parse_file(contents, filename)
+            is_valid, error_msg = FileHandler.validate_dataframe(df)
+            if not is_valid:
+                return dbc.Alert(error_msg, color="danger"), []
+
+            # Save to cache immediately — avoids large dcc.Store serialisation
+            upload_id, profiles_obj = CacheManager.save_upload(df, filename)
+            print(f"[OK] Upload saved: {upload_id} ({len(df):,} rows)")
+
+            # Run full profiler for display
+            profiler = DataProfiler()
+            profiles = profiler.profile(df)
+
+            # Classify columns
+            numeric_cols   = [n for n, p in profiles.items() if p.dtype == 'numeric']
+            categorical_cols = [n for n, p in profiles.items() if p.dtype == 'categorical']
+            temporal_cols  = [n for n, p in profiles.items() if p.is_temporal]
+            boolean_cols   = [n for n, p in profiles.items() if p.dtype == 'boolean']
+
+            # Data quality
+            total_cells = df.shape[0] * df.shape[1]
+            missing_cells = df.isnull().sum().sum()
+            completeness = round((1 - missing_cells / total_cells) * 100, 1) if total_cells else 100
+            dup_rows = df.duplicated().sum()
+
+            # Memory
+            mem_mb = round(df.memory_usage(deep=True).sum() / 1024**2, 2)
+
+            # ── STAT CARD builder ─────────────────────────────
+            def stat_card(label, value, sub="", color=NAVY, bg="#EBF4FF"):
+                return html.Div([
+                    html.Div(str(value), style={
+                        'fontSize': '26px', 'fontWeight': '800', 'color': color, 'lineHeight': '1',
+                    }),
+                    html.Div(label, style={
+                        'fontSize': '11px', 'fontWeight': '700', 'textTransform': 'uppercase',
+                        'letterSpacing': '0.07em', 'color': TEXT_LIGHT, 'marginTop': '4px',
+                    }),
+                    html.Div(sub, style={'fontSize': '11px', 'color': TEXT_LIGHT, 'marginTop': '2px'}) if sub else None,
+                ], style={
+                    'backgroundColor': bg, 'border': f'1px solid {BORDER}',
+                    'borderTop': f'3px solid {color}', 'borderRadius': '6px',
+                    'padding': '14px 16px', 'flex': '1', 'minWidth': '110px',
+                })
+
+            # ── COLUMN PROFILE ROW builder ────────────────────
+            def profile_row(name, p, idx):
+                badge_color = {
+                    'numeric': '#1A365D', 'categorical': '#065F46',
+                    'temporal': '#7C3AED', 'boolean': '#92400E',
+                }.get(p.dtype, '#374151')
+                badge_bg = {
+                    'numeric': '#EBF4FF', 'categorical': '#D1FAE5',
+                    'temporal': '#EDE9FE', 'boolean': '#FEF3C7',
+                }.get(p.dtype, '#F3F4F6')
+
+                top_vals = ", ".join(str(v) for v in (p.top_values or [])[:3])
+                missing_pct = round(p.missing_pct, 1)
+                quality_color = '#DC2626' if missing_pct > 20 else '#D97706' if missing_pct > 5 else '#16A34A'
+
+                return html.Tr([
+                    html.Td(html.Span(name, style={'fontWeight': '600', 'color': NAVY, 'fontSize': '12px'}),
+                            style={'padding': '8px 12px', 'borderBottom': f'1px solid {BORDER}',
+                                   'backgroundColor': '#F8FAFF' if idx % 2 == 0 else '#FFFFFF'}),
+                    html.Td(html.Span(p.dtype.upper(), style={
+                        'fontSize': '10px', 'fontWeight': '700', 'padding': '2px 8px',
+                        'borderRadius': '10px', 'color': badge_color, 'backgroundColor': badge_bg,
+                        'border': f'1px solid {badge_color}22',
+                    }), style={'padding': '8px 12px', 'borderBottom': f'1px solid {BORDER}',
+                               'backgroundColor': '#F8FAFF' if idx % 2 == 0 else '#FFFFFF'}),
+                    html.Td(f"{p.cardinality:,}", style={
+                        'padding': '8px 12px', 'fontSize': '12px', 'color': TEXT,
+                        'borderBottom': f'1px solid {BORDER}',
+                        'backgroundColor': '#F8FAFF' if idx % 2 == 0 else '#FFFFFF'}),
+                    html.Td(html.Span(f"{missing_pct}%", style={'color': quality_color, 'fontWeight': '600', 'fontSize': '12px'}),
+                            style={'padding': '8px 12px', 'borderBottom': f'1px solid {BORDER}',
+                                   'backgroundColor': '#F8FAFF' if idx % 2 == 0 else '#FFFFFF'}),
+                    html.Td(html.Span(top_vals or "—", style={'fontSize': '11px', 'color': TEXT_LIGHT}),
+                            style={'padding': '8px 12px', 'borderBottom': f'1px solid {BORDER}',
+                                   'backgroundColor': '#F8FAFF' if idx % 2 == 0 else '#FFFFFF',
+                                   'maxWidth': '200px', 'overflow': 'hidden', 'textOverflow': 'ellipsis'}),
+                ])
+
+            TH_STYLE = {
+                'fontSize': '10px', 'fontWeight': '700', 'textTransform': 'uppercase',
+                'letterSpacing': '0.07em', 'padding': '10px 12px',
+                'backgroundColor': NAVY, 'color': '#FFFFFF',
+                'borderBottom': f'2px solid {GOLD}',
+            }
+
+            profile_table = html.Table([
+                html.Thead(html.Tr([
+                    html.Th("Column", style=TH_STYLE),
+                    html.Th("Type", style=TH_STYLE),
+                    html.Th("Unique Values", style=TH_STYLE),
+                    html.Th("Missing", style=TH_STYLE),
+                    html.Th("Top Values", style=TH_STYLE),
+                ])),
+                html.Tbody([
+                    profile_row(name, p, idx)
+                    for idx, (name, p) in enumerate(profiles.items())
+                ]),
+            ], style={
+                'width': '100%', 'borderCollapse': 'collapse',
+                'border': f'1px solid {BORDER}', 'borderRadius': '6px',
+            })
+
+            analysis_panel = html.Div([
+                # ── Header ─────────────────────────────────────
+                html.Div([
+                    html.Div([
+                        html.Span("DATA INTELLIGENCE REPORT", style={
+                            'fontSize': '10px', 'fontWeight': '700', 'letterSpacing': '0.12em',
+                            'color': GOLD, 'display': 'block', 'marginBottom': '4px',
+                        }),
+                        html.H3(filename, style={'color': '#FFFFFF', 'fontWeight': '700', 'margin': '0', 'fontSize': '18px'}),
+                    ]),
+                ], style={
+                    'backgroundColor': NAVY, 'padding': '20px 24px',
+                    'borderRadius': '8px 8px 0 0', 'borderBottom': f'3px solid {GOLD}',
+                }),
+
+                # ── KPI strip ──────────────────────────────────
+                html.Div([
+                    stat_card("Total Records", f"{len(df):,}", f"{mem_mb} MB"),
+                    stat_card("Columns", f"{len(df.columns)}", f"{len(numeric_cols)} numeric"),
+                    stat_card("Data Completeness", f"{completeness}%",
+                              "Excellent" if completeness >= 95 else "Good" if completeness >= 80 else "Needs attention",
+                              color='#16A34A' if completeness >= 95 else '#D97706' if completeness >= 80 else '#DC2626',
+                              bg='#F0FDF4' if completeness >= 95 else '#FFFBEB' if completeness >= 80 else '#FEF2F2'),
+                    stat_card("Categorical Cols", f"{len(categorical_cols)}", "Available as filters"),
+                    stat_card("Numeric Cols", f"{len(numeric_cols)}", "Available as KPIs"),
+                    stat_card("Duplicate Rows", f"{dup_rows:,}",
+                              "None detected" if dup_rows == 0 else "Review recommended",
+                              color='#16A34A' if dup_rows == 0 else '#D97706',
+                              bg='#F0FDF4' if dup_rows == 0 else '#FFFBEB'),
+                ], style={
+                    'display': 'flex', 'gap': '12px', 'flexWrap': 'wrap',
+                    'padding': '16px 24px', 'backgroundColor': '#F8FAFF',
+                    'borderBottom': f'1px solid {BORDER}',
+                }),
+
+                # ── Column profile table ────────────────────────
+                html.Div([
+                    html.Div("Column-Level Profile", style={
+                        'fontSize': '13px', 'fontWeight': '700', 'color': NAVY,
+                        'marginBottom': '12px', 'textTransform': 'uppercase', 'letterSpacing': '0.05em',
+                    }),
+                    html.Div(profile_table, style={'overflowX': 'auto'}),
+                ], style={'padding': '20px 24px', 'backgroundColor': '#FFFFFF'}),
+
+                # ── Data Preview ───────────────────────────────
+                html.Div([
+                    html.Div("Sample Data — First 5 Rows", style={
+                        'fontSize': '13px', 'fontWeight': '700', 'color': NAVY,
+                        'marginBottom': '12px', 'textTransform': 'uppercase', 'letterSpacing': '0.05em',
+                    }),
+                    html.Div([
+                        html.Table([
+                            html.Thead(html.Tr([html.Th(c, style=TH_STYLE) for c in df.columns])),
+                            html.Tbody([
+                                html.Tr([
+                                    html.Td(str(v)[:40], style={
+                                        'fontSize': '11px', 'padding': '7px 12px',
+                                        'borderBottom': f'1px solid {BORDER}',
+                                        'backgroundColor': '#F8FAFF' if i % 2 == 0 else '#FFFFFF',
+                                        'whiteSpace': 'nowrap',
+                                    })
+                                    for v in row
+                                ])
+                                for i, row in enumerate(df.head(5).values)
+                            ]),
+                        ], style={'width': '100%', 'borderCollapse': 'collapse', 'border': f'1px solid {BORDER}'})
+                    ], style={'overflowX': 'auto'}),
+                ], style={
+                    'padding': '20px 24px', 'backgroundColor': '#FAFBFC',
+                    'borderTop': f'1px solid {BORDER}',
+                }),
+
+                # ── Action footer ─────────────────────────────
+                html.Div([
+                    html.Div([
+                        html.Span(
+                            f"Dataset validated — {len(df):,} rows ready for analysis",
+                            style={'fontSize': '13px', 'color': TEXT_LIGHT},
+                        ),
+                        dbc.Button([
+                            "Proceed to Dashboard  →"
+                        ], id='btn-confirm-upload', size='lg', style={
+                            'backgroundColor': NAVY, 'borderColor': NAVY, 'color': '#FFFFFF',
+                            'fontWeight': '700', 'letterSpacing': '0.04em', 'padding': '10px 28px',
+                            'fontSize': '14px',
+                        }),
+                    ], style={'display': 'flex', 'justifyContent': 'space-between', 'alignItems': 'center'}),
+                ], style={
+                    'padding': '16px 24px', 'backgroundColor': '#F1F5F9',
+                    'borderTop': f'2px solid {GOLD}', 'borderRadius': '0 0 8px 8px',
+                }),
+            ], style={
+                'border': f'1px solid {BORDER}', 'borderRadius': '8px',
+                'boxShadow': '0 4px 20px rgba(0,0,0,0.08)', 'marginTop': '20px',
+                'overflow': 'hidden',
+            })
+
+            return html.Div(), [analysis_panel], upload_id
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return dbc.Alert(f"Error: {str(e)}", color="danger"), [], None
