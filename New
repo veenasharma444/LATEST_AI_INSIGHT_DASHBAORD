@@ -7,3 +7,22 @@ DETAIL:  Key (upload_id)=(1) is not present in table "uploads".
 [SQL: INSERT INTO saved_dashboards (user_id, upload_id, dashboard_name, description, kpi_selections, filter_selections, confirmed_dtypes, ai_suggestions, analysis_objective, is_public, is_pinned, view_count, last_viewed_at, created_at, updated_at) VALUES (%(user_id)s, %(upload_id)s, %(dashboard_name)s, %(description)s, %(kpi_selections)s::JSON, %(filter_selections)s::JSON, %(confirmed_dtypes)s::JSON, %(ai_suggestions)s::JSON, %(analysis_objective)s, %(is_public)s, %(is_pinned)s, %(view_count)s, %(last_viewed_at)s, %(created_at)s, %(updated_at)s) RETURNING saved_dashboards.dashboard_id]
 [parameters: {'user_id': 2, 'upload_id': 1, 'dashboard_name': 'Test', 'description': None, 'kpi_selections': '[{"column": "Above 1 year", "aggregation": "sum", "label": "Total Above 1 year"}, {"column": "Balance Amount", "aggregation": "count", "label": "Count of Balance Amount"}]', 'filter_selections': '[{"column": "Brand Name", "filter_type": "dropdown", "label": "Filter by Brand Name"}, {"column": "Client Name", "filter_type": "dropdown", "label": "Filter by Client Name"}]', 'confirmed_dtypes': '{"Above 1 year": "numeric", "Balance Amount": "numeric", "Balance Collection Amount": "numeric", "Below 30 Days": "numeric", "Brand Name": "categoric ... (629 characters truncated) ... al", "Project MID": "categorical", "Property Name": "categorical", "Revenue Head": "categorical", "Service": "categorical", "Unnamed: 18": "numeric"}', 'ai_suggestions': '{"filters": [{"column": "Country", "filter_type": "dropdown", "label": "Country"}, {"column": "Invoice Date", "filter_type": "datepicker-range", "lab ... (456 characters truncated) ... ard highlights the revenue trends over time and regional performance, enabling executives to make informed decisions based on data-driven insights."}', 'analysis_objective': None, 'is_public': False, 'is_pinned': False, 'view_count': 0, 'last_viewed_at': None, 'created_at': datetime.datetime(2026, 6, 23, 5, 21, 48, 831209), 'updated_at': datetime.datetime(2026, 6, 23, 5, 21, 48, 838784)}]
 (Background on this error at: https://sqlalche.me/e/20/gkpj)
+
+
+
+
+
+dcc.Loading(
+    id="loading-ai-analysis",
+    type="circle",
+    children=[
+        html.Div(
+            id="ai-analysis-results",
+            children=[],
+            style={
+                'background': CARD_BG,
+                'padding': '20px'
+            }
+        )
+    ]
+)
