@@ -1,157 +1,46 @@
-from datetime import datetime
-
-# =========================
-# TITLE
-# =========================
-
-p.setFont("Helvetica-Bold", 22)
-p.drawString(50, 800, "AI DATA INSIGHT REPORT")
-
-p.setFont("Helvetica", 10)
-p.drawString(
-    50,
-    780,
-    f"Generated: {datetime.now().strftime('%d-%b-%Y %H:%M')}"
-)
-
-# =========================
-# OVERVIEW
-# =========================
-
-y = 740
-
-p.setFont("Helvetica-Bold", 14)
-p.drawString(50, y, "DATASET OVERVIEW")
-
-y -= 25
-
-p.setFont("Helvetica", 11)
-
-p.drawString(
-    50,
-    y,
-    f"Total Records: {len(df):,}"
-)
-
-y -= 20
-
-p.drawString(
-    50,
-    y,
-    f"Total Columns: {len(df.columns)}"
-)
-
-# =========================
-# KPI SECTION
-# =========================
-
-y -= 40
-
-p.setFont("Helvetica-Bold", 14)
-p.drawString(50, y, "KEY METRICS")
-
-y -= 25
-
-p.setFont("Helvetica", 11)
-
-numeric_cols = df.select_dtypes(include="number").columns
-
-kpi_count = 0
-
-for col in numeric_cols:
-
-    if kpi_count >= 5:
-        break
-
-    try:
-        value = df[col].sum()
-
-        p.drawString(
-            50,
-            y,
-            f"{col}: {value:,.2f}"
-        )
-
-        y -= 20
-        kpi_count += 1
-
-    except Exception:
-        pass
-
-# =========================
-# DATA QUALITY
-# =========================
-
-y -= 20
-
-p.setFont("Helvetica-Bold", 14)
-p.drawString(50, y, "DATA QUALITY")
-
-y -= 25
-
-p.setFont("Helvetica", 11)
-
-missing_found = False
-
-for col in df.columns:
-
-    missing_pct = df[col].isna().mean() * 100
-
-    if missing_pct > 20:
-
-        p.drawString(
-            50,
-            y,
-            f"{col}: {missing_pct:.1f}% missing"
-        )
-
-        y -= 20
-        missing_found = True
-
-        if y < 120:
-            break
-
-if not missing_found:
-
-    p.drawString(
-        50,
-        y,
-        "No major missing-data issues detected."
+@app.callback(
+        Output('save-dashboard-status', 'children'),
+        Input('btn-save-dashboard', 'n_clicks'),
+        State('save-dashboard-name', 'value'),
+        State('store-kpi-selections-dashboard', 'data'),
+        State('store-filter-selections-dashboard', 'data'),
+        State('store-confirmed-dtypes-dashboard', 'data'),
+        State('store-ai-suggestions', 'data'),
+        State('store-upload-id', 'data'),
+        State('session-state', 'data'),
+        prevent_initial_call=True
     )
+    def save_dashboard_callback(n_clicks,dashboard_name,kpis,filters,dtypes,ai_suggestions,upload_id,session_data):
 
-    y -= 20
+        if not dashboard_name:
+            return "Please enter dashboard name"
 
-# =========================
-# COLUMN SUMMARY
-# =========================
+        user_id = (session_data or {}).get("user_id")
 
-y -= 20
+        if not user_id:
+            return "User session not found"
 
-p.setFont("Helvetica-Bold", 14)
-p.drawString(50, y, "COLUMN SUMMARY")
+        manifest = CacheManager.load_manifest()
+        upload_id = manifest.get("active_upload_id")
 
-y -= 25
+        if not upload_id:
+            return "No active upload found"
 
-categorical_cols = len(
-    df.select_dtypes(include=["object"]).columns
-)
+        print("UPLOAD_ID =", upload_id)
+        print("TYPE=", type(upload_id))
+        
+        result = save_dashboard(
+            dashboard_name,
+            user_id,
+            upload_id,
+            kpis or [],
+            filters or [],
+            dtypes or {},
+            ai_suggestions or {}
+        )
 
-numeric_cols_count = len(
-    df.select_dtypes(include="number").columns
-)
+        if result.get("success"):
+            return f" Dashboard '{dashboard_name}' saved successfully"
 
-p.setFont("Helvetica", 11)
-
-p.drawString(
-    50,
-    y,
-    f"Numeric Columns: {numeric_cols_count}"
-)
-
-y -= 20
-
-p.drawString(
-    50,
-    y,
-    f"Categorical Columns: {categorical_cols}"
-)
+        return f" {result.get('message', 'Save failed')}"
+    
