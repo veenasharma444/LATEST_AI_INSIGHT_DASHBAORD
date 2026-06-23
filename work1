@@ -1,1 +1,39 @@
 
+@app.callback(
+    Output("download-dashboard-pdf", "data"),
+    Input("btn-download-pdf", "n_clicks"),
+    prevent_initial_call=True
+)
+def download_pdf(n_clicks):
+
+    print("=" * 80)
+    print("DOWNLOAD PDF CLICKED")
+    print("=" * 80)
+
+    pdf_buffer = io.BytesIO()
+
+    p = canvas.Canvas(pdf_buffer)
+
+    p.setFont("Helvetica-Bold", 18)
+    p.drawString(100, 800, "AI Data Insight Dashboard")
+
+    p.setFont("Helvetica", 12)
+    p.drawString(100, 770, "Dashboard PDF Export Test")
+
+    p.drawString(100, 740, "If you can read this, PDF generation works.")
+
+    p.save()
+
+    pdf_buffer.seek(0)
+
+    return dcc.send_bytes(
+        pdf_buffer.getvalue(),
+        "dashboard.pdf"
+
+
+import io
+
+from reportlab.pdfgen import canvas
+
+
+    )
