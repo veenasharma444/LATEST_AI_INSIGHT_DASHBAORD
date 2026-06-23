@@ -1,12 +1,1 @@
-@app.callback(
-    Output("download-dashboard-pdf", "data"),
-    Input("btn-download-pdf", "n_clicks"),
-    prevent_initial_call=True
-)
-def download_pdf(n_clicks):
 
-    print("=" * 80)
-    print("DOWNLOAD PDF CLICKED")
-    print("=" * 80)
-
-    raise PreventUpdate
