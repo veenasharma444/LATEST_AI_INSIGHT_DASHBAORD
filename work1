@@ -1,1 +1,157 @@
+from datetime import datetime
 
+# =========================
+# TITLE
+# =========================
+
+p.setFont("Helvetica-Bold", 22)
+p.drawString(50, 800, "AI DATA INSIGHT REPORT")
+
+p.setFont("Helvetica", 10)
+p.drawString(
+    50,
+    780,
+    f"Generated: {datetime.now().strftime('%d-%b-%Y %H:%M')}"
+)
+
+# =========================
+# OVERVIEW
+# =========================
+
+y = 740
+
+p.setFont("Helvetica-Bold", 14)
+p.drawString(50, y, "DATASET OVERVIEW")
+
+y -= 25
+
+p.setFont("Helvetica", 11)
+
+p.drawString(
+    50,
+    y,
+    f"Total Records: {len(df):,}"
+)
+
+y -= 20
+
+p.drawString(
+    50,
+    y,
+    f"Total Columns: {len(df.columns)}"
+)
+
+# =========================
+# KPI SECTION
+# =========================
+
+y -= 40
+
+p.setFont("Helvetica-Bold", 14)
+p.drawString(50, y, "KEY METRICS")
+
+y -= 25
+
+p.setFont("Helvetica", 11)
+
+numeric_cols = df.select_dtypes(include="number").columns
+
+kpi_count = 0
+
+for col in numeric_cols:
+
+    if kpi_count >= 5:
+        break
+
+    try:
+        value = df[col].sum()
+
+        p.drawString(
+            50,
+            y,
+            f"{col}: {value:,.2f}"
+        )
+
+        y -= 20
+        kpi_count += 1
+
+    except Exception:
+        pass
+
+# =========================
+# DATA QUALITY
+# =========================
+
+y -= 20
+
+p.setFont("Helvetica-Bold", 14)
+p.drawString(50, y, "DATA QUALITY")
+
+y -= 25
+
+p.setFont("Helvetica", 11)
+
+missing_found = False
+
+for col in df.columns:
+
+    missing_pct = df[col].isna().mean() * 100
+
+    if missing_pct > 20:
+
+        p.drawString(
+            50,
+            y,
+            f"{col}: {missing_pct:.1f}% missing"
+        )
+
+        y -= 20
+        missing_found = True
+
+        if y < 120:
+            break
+
+if not missing_found:
+
+    p.drawString(
+        50,
+        y,
+        "No major missing-data issues detected."
+    )
+
+    y -= 20
+
+# =========================
+# COLUMN SUMMARY
+# =========================
+
+y -= 20
+
+p.setFont("Helvetica-Bold", 14)
+p.drawString(50, y, "COLUMN SUMMARY")
+
+y -= 25
+
+categorical_cols = len(
+    df.select_dtypes(include=["object"]).columns
+)
+
+numeric_cols_count = len(
+    df.select_dtypes(include="number").columns
+)
+
+p.setFont("Helvetica", 11)
+
+p.drawString(
+    50,
+    y,
+    f"Numeric Columns: {numeric_cols_count}"
+)
+
+y -= 20
+
+p.drawString(
+    50,
+    y,
+    f"Categorical Columns: {categorical_cols}"
+)
