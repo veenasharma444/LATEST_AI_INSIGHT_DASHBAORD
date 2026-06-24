@@ -1,1 +1,34 @@
+@app.callback(
+    Output("load-dashboard-dropdown", "options"),
+    Input("btn-refresh-saved-list", "n_clicks"),
+    State("session-state", "data"),
+    prevent_initial_call=True
+)
+def refresh_saved_dashboards(n_clicks, session_data):
 
+    from core.db_connector import get_session
+    from core.app_db import SavedDashboard
+
+    user_id = (session_data or {}).get("user_id")
+
+    if not user_id:
+        return []
+
+    session = get_session()
+
+    dashboards = (
+        session.query(SavedDashboard)
+        .filter(SavedDashboard.user_id == user_id)
+        .order_by(SavedDashboard.created_at.desc())
+        .all()
+    )
+
+    print(f"[LOAD] Found {len(dashboards)} dashboards")
+
+    return [
+        {
+            "label": d.dashboard_name,
+            "value": d.dashboard_id
+        }
+        for d in dashboards
+    ]
