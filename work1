@@ -1,1 +1,6 @@
 
+user_id = (session_data or {}).get("user_id")
+
+if not user_id:
+    print("[ERROR] User session not found")
+    return dbc.Alert("User session not found", color="danger"), [], None
