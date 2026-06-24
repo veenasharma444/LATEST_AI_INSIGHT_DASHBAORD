@@ -1,34 +1,35 @@
-class SavedDashboard(Base):
-    """Persist dashboard configurations"""
-    __tablename__ = "saved_dashboards"
+class Upload(Base):
+    """Track file and database uploads"""
+    __tablename__ = "uploads"
     __table_args__ = (
-        Index('idx_saved_dashboards_user_id', 'user_id'),
-        Index('idx_saved_dashboards_upload_id', 'upload_id'),
-        Index('idx_saved_dashboards_created_at', 'created_at'),
+        Index('idx_uploads_user_id', 'user_id'),
+        Index('idx_uploads_source_type', 'source_type'),
+        Index('idx_uploads_created_at', 'created_at'),
     )
 
-    dashboard_id = Column(Integer, primary_key=True)
+    upload_id = Column(Integer, primary_key=True)
     user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
-    upload_id = Column(Integer, ForeignKey("uploads.upload_id"), nullable=False)
-    dashboard_name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    kpi_selections = Column(JSON, nullable=False)  # {"kpis": [...]}
-    filter_selections = Column(JSON, nullable=False)  # {"filters": [...]}
-    confirmed_dtypes = Column(JSON, nullable=False)  # {"column": "type", ...}
-    chart_configs = Column(JSON, nullable=True)
-    ai_suggestions = Column(JSON, nullable=True)  # LLM recommendations
-    analysis_objective = Column(Text, nullable=True)
-    is_public = Column(Boolean, default=False)
-    is_pinned = Column(Boolean, default=False)
-    view_count = Column(Integer, default=0)
-    last_viewed_at = Column(DateTime, nullable=True)
+    source_type = Column(String(50), nullable=False)  # csv, excel, postgresql, mysql, oracle, sqlite
+    source_name = Column(String(255), nullable=False)  # filename or table name
+    file_size_mb = Column(DECIMAL(10, 2), nullable=True)
+    row_count = Column(Integer, nullable=False)
+    column_count = Column(Integer, nullable=False)
+    upload_path = Column(Text, nullable=False)  # .cache/user_uploads/...
+    profiles_path = Column(Text, nullable=False)  # .cache/user_uploads/..._profiles.json
+    data_hash = Column(String(64), nullable=True, index=True)  # SHA-256
+    source_database_id = Column(Integer, ForeignKey("db_connections.connection_id"), nullable=True)
+    status = Column(String(50), default='ready')  # uploading, processing, ready, error
+    error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    updated_at = Column(DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)  # 90-day auto-delete
 
     # Relationships
-    user = relationship("User", back_populates="saved_dashboards")
-    upload = relationship("Upload", back_populates="saved_dashboards")
-    analysis_logs = relationship("AnalysisLog", back_populates="saved_dashboard")
+    user = relationship("User", back_populates="uploads")
+    db_connection = relationship("DBConnection", back_populates="uploads")
+    column_profiles = relationship("ColumnProfile", back_populates="upload", cascade="all, delete-orphan")
+    saved_dashboards = relationship("SavedDashboard", back_populates="upload", cascade="all, delete-orphan")
+    analysis_logs = relationship("AnalysisLog", back_populates="upload")
+    llm_cache = relationship("LLMCache", back_populates="upload", cascade="all, delete-orphan")
 
     def __repr__(self):
-        return f"<SavedDashboard(dashboard_id={self.dashboard_id}, dashboard_name={self.dashboard_name})>"
+        return f"<Upload(upload_id={self.upload_id}, source_type={self.source_type}, row_count={self.row_count})>"
